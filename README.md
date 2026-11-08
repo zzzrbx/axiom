@@ -4,27 +4,71 @@ A tiny agent SDK, written to be read. An agent is a chat model that can call
 your Python functions ("tools") until it has an answer. axiom does that in
 plain Python, with no dependencies, in four short files.
 
-## Try it
+## Example
+
+```python
+import asyncio
+import os
+from dataclasses import dataclass
+
+from axiom import Agent, ChatModel, tool
+
+
+@tool
+async def get_weather(city: str) -> str:
+    """Current weather in a city."""
+    return f"{city}: 18°C, sunny"  # a real tool would call a weather API
+
+
+@dataclass
+class Weather:
+    city: str
+    celsius: int
+
+
+async def main() -> None:
+    model = ChatModel(
+        model="gpt-5-mini",
+        api_key=os.environ["OPENAI_API_KEY"],
+        base_url="https://api.openai.com/v1",
+    )
+    agent = Agent(model, tools=[get_weather])
+
+    # 1. A text answer. The model calls get_weather twice, at the same time.
+    print(await agent.run("What's the weather in Rome and in Oslo?"))
+
+    # 2. A typed answer: a Weather instance instead of text.
+    weather = await agent.run("And in Paris?", output_type=Weather)
+    print(weather.celsius)
+
+    # 3. Sessions: each session_id is a separate conversation.
+    await agent.run("My name is Ada.", session_id="ada")
+    print(await agent.run("What's my name?", session_id="ada"))
+
+
+asyncio.run(main())
+```
+
+While it works, the agent prints each step (turn this off with `verbose=False`):
+
+```text
+  → get_weather({"city": "Rome"})
+  → get_weather({"city": "Oslo"})
+  ← Rome: 18°C, sunny
+  ← Oslo: 18°C, sunny
+assistant: Both Rome and Oslo are 18°C and sunny.
+```
+
+Runs without a `session_id` share the `"default"` session, which is why
+"And in Paris?" makes sense in step 2.
+
+Any OpenAI-compatible provider works: change `model`, `api_key` and `base_url`.
+A shorter version is in `examples/basic.py`:
 
 ```bash
 export OPENAI_API_KEY=sk-...
 uv run python examples/basic.py
 ```
-
-```python
-from axiom import Agent, ChatModel, tool
-
-@tool
-async def get_weather(city: str) -> str:
-    """Current weather in a city."""
-    return f"{city}: 18°C, sunny"
-
-model = ChatModel(model="gpt-5-mini", api_key="sk-...", base_url="https://api.openai.com/v1")
-agent = Agent(model, tools=[get_weather])
-answer = await agent.run("What's the weather in Rome and in Oslo?")
-```
-
-Any OpenAI-compatible provider works: change `model`, `api_key` and `base_url`.
 
 ## Read the code in this order
 
